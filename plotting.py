@@ -58,17 +58,20 @@ def build_ratings_figure(plot_data):
     rating shown as a jittered point on top. Points are colored by the
     section's category (one trace per category, so the legend groups by
     category). Hovering a point shows that respondent's rating and any
-    why/feedback text, with no respondent identity shown. A menu lets you
-    toggle the section (y-axis) order between "sorted by average rating"
-    and "P0-P35 in category order".
+    why/feedback text, with no respondent identity shown. Buttons switch
+    the section (y-axis) order between ascending rating, descending
+    rating, and grouped by category (Overall, Building Blocks, Abstract
+    Concepts, Core Classes, User Stories, Auxiliary -- top to bottom,
+    same order as the legend).
     """
-    rating_order = (
+    rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
         .mean()
         .sort_values()
         .index.map(SECTION_TITLES)
         .tolist()
     )
+    rating_order_desc = list(reversed(rating_order_asc))
     category_order = [
         SECTION_TITLES[f"p{i}_{slug}"]
         for category in CATEGORY_ORDER
@@ -112,7 +115,8 @@ def build_ratings_figure(plot_data):
         yaxis={
             "type": "category",
             "categoryorder": "array",
-            "categoryarray": rating_order,
+            "categoryarray": rating_order_asc,
+            "autorange": "reversed",
         },
         boxmode="overlay",
         height=max(400, 28 * len(SECTION_SLUGS) + 150),
@@ -127,12 +131,17 @@ def build_ratings_figure(plot_data):
                 "yanchor": "bottom",
                 "buttons": [
                     {
-                        "label": "Sort by rating",
+                        "label": "Sort ascending",
                         "method": "relayout",
-                        "args": [{"yaxis.categoryarray": rating_order}],
+                        "args": [{"yaxis.categoryarray": rating_order_asc}],
                     },
                     {
-                        "label": "Group by category (P-order)",
+                        "label": "Sort descending",
+                        "method": "relayout",
+                        "args": [{"yaxis.categoryarray": rating_order_desc}],
+                    },
+                    {
+                        "label": "Group by category",
                         "method": "relayout",
                         "args": [{"yaxis.categoryarray": category_order}],
                     },
