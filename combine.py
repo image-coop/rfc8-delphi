@@ -159,7 +159,7 @@ def get_numbers_only(df):
 def melt_by_category(numbers_df):
     respondent_cols = [
         c for c in numbers_df.columns
-        if c not in ("sec_name", "category")
+        if c not in ("sec_name", "category", "average", "median")
     ]
 
     long = numbers_df.melt(
@@ -217,7 +217,7 @@ def get_text_feedback(df):
     return pd.DataFrame(records)
 
 
-def _section_title(i, slug):
+def section_title(i, slug):
     return f"P{i}: {slug.replace('_', ' ').title()}"
 
 
@@ -229,7 +229,9 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
     """
     rows: list of (rating, text) tuples. Sorts by rating ascending and
     inserts a separator between comments below LOW_RATING_THRESHOLD and
-    comments at or above it.
+    comments at or above it. Each comment is rendered as a blockquote with
+    the rating bolded on its own line, so multi-paragraph responses stay
+    grouped together instead of breaking out of a list item.
     """
     sorted_rows = sorted(rows, key=lambda r: r[0])
     lines = []
@@ -237,9 +239,14 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
     for rating, text in sorted_rows:
         if not separator_done and rating >= low_rating_threshold:
             if lines:
-                lines.extend(["", "---", ""])
+                lines.append("---")
+                lines.append("")
             separator_done = True
-        lines.append(f"- ({rating:g}) {text}")
+        lines.append(f"> **{rating:g}**")
+        lines.append(">")
+        for paragraph in str(text).splitlines():
+            lines.append(f"> {paragraph}" if paragraph.strip() else ">")
+        lines.append("")
     return lines
 
 
@@ -277,7 +284,7 @@ def render_feedback_markdown(text_df, low_rating_threshold=LOW_RATING_THRESHOLD)
             if not why_rows and not feedback_rows:
                 continue
 
-            block = [f"### {_section_title(i, slug)}", ""]
+            block = [f"### {section_title(i, slug)}", ""]
             if why_rows:
                 block.append("#### Why")
                 block.append("")
@@ -304,8 +311,10 @@ def render_feedback_markdown(text_df, low_rating_threshold=LOW_RATING_THRESHOLD)
         if rows.empty:
             continue
         block = [f"### {_suffix_title(suffix_name)}", ""]
-        block.extend(f"- {text}" for text in rows["feedback"])
-        block.append("")
+        for text in rows["feedback"]:
+            for paragraph in str(text).splitlines():
+                block.append(f"> {paragraph}" if paragraph.strip() else ">")
+            block.append("")
         extra_blocks.append(block)
 
     if extra_blocks:
