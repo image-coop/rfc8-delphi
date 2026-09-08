@@ -2,12 +2,6 @@ import re
 
 import pandas as pd
 
-PREFIX_NAMES = [
-    "timestamp",
-    "group",
-    "name",
-]
-
 SECTION_SLUGS = [
     "overall_proposal",
     "motivation_goals_non_goals",
@@ -46,6 +40,70 @@ SECTION_SLUGS = [
     "compatibility",
     "security",
 ]
+
+# Exact original CSV header text for each entry in SECTION_SLUGS, in the same
+# order. Used to locate each section's rating column by content rather than
+# position, so column order/reordering in the source spreadsheet doesn't
+# matter. The why/feedback columns aren't matched by text (they're identical
+# boilerplate for every section) -- they're taken as the two columns
+# immediately following the matched rating column.
+SECTION_TITLES_RAW = [
+    "P0. Overall proposal",
+    "P1. Motivation (“the Why”) / Goals / Non-goals",
+    "P2. Paths (including the Zarr & JSON types)",
+    "P3. References (including remote)",
+    "P4. Relationship to consolidated metadata",
+    "P5. All necessary building blocks have been covered.",
+    "P6. Abstract node concept",
+    "P7. Attributes (including the typing system)",
+    "P8. Metadata storage (including inlining, etc.)",
+    "P9. The components of the necessary structure have been covered.",
+    "P10. Collection",
+    "P11. Single scale",
+    "P12. Multiscales",
+    "P13. Coordinates",
+    "P14. Labels",
+    "P15. LabelAttributes",
+    "P16. HCS",
+    "P17. All necessary core class changes have been covered.",
+    "P18. Extension system (including naming scheme & the definition of extension points, but not the actual list of them)",
+    "P19. Visualize multiple images",
+    "P20. m:n segmentations",
+    "P21. Shallow copies of images with segmentations",
+    "P22. Correlative imaging",
+    "P23. HCS plates",
+    "P24. Image Archive",
+    "P25. Rendering settings",
+    "P26. Grouping together remote images",
+    "P27. Adding other datatypes to images",
+    "P28. Gallery / grid views",
+    "P29. All critical user stories have been covered.",
+    "P30. Drawbacks",
+    "P31. Abandoned ideas",
+    "P32. Prior art",
+    "P33. Performance",
+    "P34. Compatibility",
+    "P35. Security",
+]
+
+# Alternate/reworded header text seen in some spreadsheet revisions for a
+# section already in SECTION_TITLES_RAW, mapped to that section's canonical
+# index. A spreadsheet may contain the primary title, an alternate title, or
+# (having been asked under both labels across form revisions) both -- in the
+# last case the columns are coalesced per-respondent, primary first.
+ALTERNATE_SECTION_TITLES = {
+    "P14. All necessary core classes are present and updated.": 17,
+}
+
+# Raw CSV header text -> short column name, for the single (non-repeating)
+# columns. Matched by content, wherever they appear in the source file.
+FIXED_COLUMNS = {
+    "Timestamp": "timestamp",
+    "Which group are you responding on behalf of?": "group",
+    "If other, please say which": "name",
+    "What are the 1–3 most important changes that would increase your group’s support for RFC-8?": "top_changes",
+    "Are there any propositions where your group believes further discussion is essential?": "discussion_needed",
+}
 
 SUFFIX_NAMES = [
     "top_changes",
@@ -87,20 +145,91 @@ CATEGORY_TITLES = {
 LOW_RATING_THRESHOLD = 70
 
 
-def shorten_column_names(df):
-    new_columns = PREFIX_NAMES.copy()
-    for i, slug in enumerate(SECTION_SLUGS):
-        new_columns.extend([f"p{i}_{slug}", f"p{i}_why", f"p{i}_feedback"])
-    new_columns.extend(SUFFIX_NAMES)
+# Every known raw header text -> canonical section index. A section can have
+# more than one raw text mapping to it (primary + alternates), so this isn't
+# invertible; SECTION_TITLES_RAW remains the canonical index -> primary text
+# direction.
+SECTION_TITLE_TO_INDEX = {title: i for i, title in enumerate(SECTION_TITLES_RAW)}
+SECTION_TITLE_TO_INDEX.update(ALTERNATE_SECTION_TITLES)
 
-    if len(new_columns) != len(df.columns):
+
+def _coalesce(df, indices):
+    """Pick one of two possible columns for a section (support different spreadsheet versions)."""
+    series = [df.iloc[:, i] for i in indices if i is not None]
+    if not series:
+        return float("nan")
+    result = series[0]
+    for s in series[1:]:
+        result = result.combine_first(s)
+    return result
+
+
+def shorten_column_names(df):
+    """
+    Rename raw survey columns to short names by matching header text:
+      - Timestamp/group/name/top_changes/discussion_needed are matched by
+        exact text, wherever they appear.
+      - Each section's rating column is matched by its exact title text --
+        either the original wording in SECTION_TITLES_RAW, or a reworded
+        variant registered in ALTERNATE_SECTION_TITLES to handle different
+        spreadsheet formats.
+        The two columns immediately following a matched title are taken as
+        its why/feedback (those are identical boilerplate text for every
+        section, so can't be matched by content).
+      - A section not found at all in this spreadsheet gets NaN-filled
+        rating/why/feedback columns instead of raising.
+      - Any column that doesn't match anything known is dropped (with a
+        warning).
+    """
+    columns = list(df.columns)
+    used = [False] * len(columns)
+
+    matched_fixed = {}
+    for i, col in enumerate(columns):
+        if col in FIXED_COLUMNS:
+            matched_fixed[FIXED_COLUMNS[col]] = i
+            used[i] = True
+
+    matched_sections = {}
+    for i, col in enumerate(columns):
+        if used[i]:
+            continue
+        idx = SECTION_TITLE_TO_INDEX.get(col)
+        if idx is None:
+            continue
+        used[i] = True
+        why_idx = i + 1 if i + 1 < len(columns) and not used[i + 1] else None
+        feedback_idx = i + 2 if i + 2 < len(columns) and not used[i + 2] else None
+        if why_idx is not None:
+            used[why_idx] = True
+        if feedback_idx is not None:
+            used[feedback_idx] = True
+        matched_sections.setdefault(idx, []).append((i, why_idx, feedback_idx))
+
+    missing_fixed = [name for name in FIXED_COLUMNS.values() if name not in matched_fixed]
+    missing_sections = [i for i in range(len(SECTION_SLUGS)) if i not in matched_sections]
+    if missing_fixed or missing_sections:
         raise ValueError(
-            f"Expected {len(new_columns)} columns, got {len(df.columns)}"
+            f"Missing expected columns: fixed={missing_fixed}, "
+            f"sections={[SECTION_TITLES_RAW[i] for i in missing_sections]}"
         )
 
-    df = df.copy()
-    df.columns = new_columns
-    return df
+    dropped = [columns[i] for i in range(len(columns)) if not used[i]]
+    if dropped:
+        print(f"shorten_column_names: dropping unrecognized columns: {dropped}")
+
+    out = {name: df.iloc[:, matched_fixed[name]] for name in ("timestamp", "group", "name")}
+
+    for i, slug in enumerate(SECTION_SLUGS):
+        matches = matched_sections[i]
+        out[f"p{i}_{slug}"] = _coalesce(df, [m[0] for m in matches])
+        out[f"p{i}_why"] = _coalesce(df, [m[1] for m in matches])
+        out[f"p{i}_feedback"] = _coalesce(df, [m[2] for m in matches])
+
+    for name in SUFFIX_NAMES:
+        out[name] = df.iloc[:, matched_fixed[name]]
+
+    return pd.DataFrame(out)
 
 def categorize_ps(df):
     """
