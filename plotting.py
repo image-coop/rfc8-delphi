@@ -139,6 +139,7 @@ def build_ratings_figure(plot_data):
         boxmode="overlay",
         height=max(400, 28 * len(SECTION_SLUGS) + 150),
         legend_title_text="Category",
+        legend={"itemclick": False, "itemdoubleclick": False},
         updatemenus=[
             {
                 "type": "buttons",
