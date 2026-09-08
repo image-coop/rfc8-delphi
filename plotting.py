@@ -2,6 +2,7 @@ import textwrap
 
 import pandas as pd
 import plotly.graph_objects as go
+import seaborn as sns
 
 from combine import (
     CATEGORY_ORDER,
@@ -17,6 +18,19 @@ from combine import (
 SECTION_TITLES = {
     f"p{i}_{slug}": section_title(i, slug) for i, slug in enumerate(SECTION_SLUGS)
 }
+
+CATEGORY_COLORS = dict(
+    zip(CATEGORY_ORDER, sns.color_palette("colorblind", n_colors=len(CATEGORY_ORDER)).as_hex())
+)
+
+BOX_FILL_OPACITY = 0.12
+BOX_LINE_OPACITY = 0.35
+
+
+def _rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {alpha})"
 
 
 def get_plot_data(df):
@@ -90,6 +104,7 @@ def build_ratings_figure(plot_data):
         if subset.empty:
             continue
 
+        color = CATEGORY_COLORS[category]
         fig.add_trace(
             go.Box(
                 x=subset["rating"],
@@ -106,6 +121,9 @@ def build_ratings_figure(plot_data):
                 ],
                 hovertemplate="%{text}<extra></extra>",
                 hoveron="points",
+                fillcolor=_rgba(color, BOX_FILL_OPACITY),
+                line={"color": _rgba(color, BOX_LINE_OPACITY), "width": 1},
+                marker={"color": color, "opacity": 0.85, "size": 6},
             )
         )
 
