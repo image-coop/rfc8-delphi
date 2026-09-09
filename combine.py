@@ -251,7 +251,7 @@ def _is_blank(value):
 
 def _respondent_ids(df):
     ids = [
-        f"{_slugify(group)}_{_slugify(name)}"
+        _slugify(group) if _is_blank(name) else f"{_slugify(group)}_{_slugify(name)}"
         for group, name in zip(df["group"], df["name"])
     ]
     if len(ids) != len(set(ids)):
