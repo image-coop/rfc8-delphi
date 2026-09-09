@@ -73,10 +73,11 @@ def build_ratings_figure(plot_data):
     section's category (one trace per category, so the legend groups by
     category). Hovering a point shows that respondent's rating and any
     why/feedback text, with no respondent identity shown. Buttons switch
-    the section (y-axis) order between ascending rating, descending
-    rating, and grouped by category (Overall, Building Blocks, Abstract
-    Concepts, Core Classes, User Stories, Auxiliary -- top to bottom,
-    same order as the legend).
+    the section (y-axis) order between: ascending mean rating, descending
+    mean rating, ascending minimum rating, and
+    grouped by category (Overall, Building Blocks, Abstract Concepts,
+    Core Classes, User Stories, Auxiliary -- top to bottom, same order as
+    the legend).
     """
     rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
@@ -86,6 +87,13 @@ def build_ratings_figure(plot_data):
         .tolist()
     )
     rating_order_desc = list(reversed(rating_order_asc))
+    rating_order_min = (
+        plot_data.groupby("sec_name")["rating"]
+        .min()
+        .sort_values()
+        .index.map(SECTION_TITLES)
+        .tolist()
+    )
     category_order = [
         SECTION_TITLES[f"p{i}_{slug}"]
         for category in CATEGORY_ORDER
@@ -158,6 +166,11 @@ def build_ratings_figure(plot_data):
                         "label": "Sort descending",
                         "method": "relayout",
                         "args": [{"yaxis.categoryarray": rating_order_desc}],
+                    },
+                    {
+                        "label": "Sort by minimum",
+                        "method": "relayout",
+                        "args": [{"yaxis.categoryarray": rating_order_min}],
                     },
                     {
                         "label": "Group by category",
