@@ -109,6 +109,9 @@ def build_ratings_figure(plot_data):
     plotly.graph_objects.Figure
         The interactive figure.
     """
+    natural_order_asc = (
+        plot_data["sec_name"].sort_values().index.map(SECTION_TITLES).tolist()
+    )
     rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
         .mean()
@@ -193,6 +196,11 @@ def build_ratings_figure(plot_data):
                 "y": 1.03,
                 "yanchor": "bottom",
                 "buttons": [
+                    {
+                        "label": "Natural order",
+                        "method": "relayout",
+                        "args": [{"yaxis.categoryarray": natural_order_asc}],
+                    },
                     {
                         "label": "Sort ascending",
                         "method": "relayout",
