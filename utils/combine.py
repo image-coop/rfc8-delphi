@@ -152,7 +152,26 @@ SECTION_TITLE_TO_INDEX.update(ALTERNATE_SECTION_TITLES)
 
 
 def _coalesce(df, indices):
-    """Pick one of two possible columns for a section (support different spreadsheet versions)."""
+    """
+    Pick the first non-null value across a set of columns, per row.
+
+    Used to merge a section's primary and alternate rating/why/feedback
+    columns when a spreadsheet happens to contain both.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The raw (pre-rename) survey dataframe.
+    indices : list of int or None
+        Positional column indices to coalesce, in priority order. ``None``
+        entries are skipped.
+
+    Returns
+    -------
+    pandas.Series or float
+        The coalesced column, or ``float("nan")`` if no valid indices were
+        given.
+    """
     series = [df.iloc[:, i] for i in indices if i is not None]
     if not series:
         return float("nan")
@@ -164,20 +183,43 @@ def _coalesce(df, indices):
 
 def shorten_column_names(df):
     """
-    Rename raw survey columns to short names by matching header text:
-      - Timestamp/group/name/top_changes/discussion_needed are matched by
-        exact text, wherever they appear.
-      - Each section's rating column is matched by its exact title text --
-        either the original wording in SECTION_TITLES_RAW, or a reworded
-        variant registered in ALTERNATE_SECTION_TITLES to handle different
-        spreadsheet formats.
-        The two columns immediately following a matched title are taken as
-        its why/feedback (those are identical boilerplate text for every
-        section, so can't be matched by content).
-      - A section not found at all in this spreadsheet gets NaN-filled
-        rating/why/feedback columns instead of raising.
-      - Any column that doesn't match anything known is dropped (with a
-        warning).
+    Rename raw survey columns to unique, pythonic names by matching header text.
+
+    Matching rules
+    --------------
+    - Timestamp/group/name/top_changes/discussion_needed are matched by
+      exact text, wherever they appear.
+    - Each section's rating column is matched by its exact title text --
+      either the original wording in ``SECTION_TITLES_RAW``, or a
+      reworded variant registered in ``ALTERNATE_SECTION_TITLES`` to
+      handle different spreadsheet formats. The two columns immediately
+      following a matched title are taken as its why/feedback columns
+      (those are identical boilerplate text for every section, so can't
+      be matched by content).
+    - A section not found at all in this spreadsheet gets NaN-filled
+      rating/why/feedback columns instead of raising.
+    - If both a section's primary and alternate title appear as separate
+      columns in the same spreadsheet, their values are coalesced
+      per-respondent (see ``_coalesce``).
+    - Any column that doesn't match anything known is dropped (with a
+      printed warning).
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw survey export, as read directly from CSV.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A new dataframe with columns ``timestamp``, ``group``, ``name``,
+        ``p{i}_<slug>``/``p{i}_why``/``p{i}_feedback`` for each section in
+        ``SECTION_SLUGS``, and ``top_changes``/``discussion_needed``.
+
+    Raises
+    ------
+    ValueError
+        If any fixed column or section is missing entirely from ``df``.
     """
     columns = list(df.columns)
     used = [False] * len(columns)
@@ -231,7 +273,17 @@ def shorten_column_names(df):
 
 def categorize_ps(df):
     """
-    Categorize the columns of the dataframe into broader headings.
+    Add a category column for every section.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A df already processed by ``shorten_column_names``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of ``df`` with a ``p{i}_category`` column added for every section.
     """
     df = df.copy()
     for i, category in P_CATEGORIES.items():
@@ -241,8 +293,7 @@ def categorize_ps(df):
 
 def prepare_df(raw_df):
     """
-    The one required prep step for a raw survey export before any other
-    function in this module (or plotting.py) can be used: shortens column
+    Initial prep function before any other function can be used: shortens column
     names and adds p{i}_category columns.
     """
     return categorize_ps(shorten_column_names(raw_df))
@@ -253,6 +304,25 @@ def _is_blank(value):
 
 
 def _respondent_ids(df):
+    """
+    Combine "group" and "other" into single respondents.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened df with ``group`` and ``name`` columns.
+
+    Returns
+    -------
+    list of str
+        One identifier per row: ``group`` alone, or ``"{group} - {name}"``
+        when ``name`` isn't blank (the "If other, please say which" case).
+
+    Raises
+    ------
+    ValueError
+        If two rows produce the same identifier.
+    """
     ids = [
         str(group).strip() if _is_blank(name) else f"{str(group).strip()} - {str(name).strip()}"
         for group, name in zip(df["group"], df["name"])
@@ -266,12 +336,21 @@ def _respondent_ids(df):
 
 def anonymize_respondents(df):
     """
-    Return a copy of a shortened/categorized df with group/name replaced by
-    generic labels ("Group 1", "Group 2", ...), assigned in a stable order
-    (sorted by the existing respondent id) so re-running gives the same
-    mapping. Apply this before get_numbers_only/get_text_feedback/
-    get_plot_data if you want anonymous output -- those functions and
-    plot_ratings always just display whatever's in group/name as-is.
+    Replace respondent identity with generic labels.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened/categorized df with ``group`` and ``name`` columns.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of ``df`` with ``group`` replaced by ``"Group 1"``,
+        ``"Group 2"``, etc. (assigned in a stable order, sorted by the
+        existing respondent id) and ``name`` blanked. Apply this after
+        ``prepare_df``, before any downstream analysis if you want
+        anonymous output.
     """
     ids = _respondent_ids(df)
     order = {respondent_id: i + 1 for i, respondent_id in enumerate(sorted(set(ids)))}
@@ -284,9 +363,20 @@ def anonymize_respondents(df):
 
 def get_numbers_only(df):
     """
-    Reshape a shortened, categorized df so each row is a section (sec_name)
-    with its category, and each respondent (group + name) gets a column
-    holding the rating they gave that section.
+    Reshape ratings into one row per section, add average and median.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened, categorized df.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section, with columns ``sec_name``, ``category``, one
+        column per respondent (see ``_respondent_ids``) holding the rating
+        they gave that section, plus ``average`` and ``median`` across all
+        respondents.
     """
     respondent_ids = _respondent_ids(df)
 
@@ -307,6 +397,22 @@ def get_numbers_only(df):
 
 
 def melt_by_category(numbers_df):
+    """
+    Convert a get_numbers_only-shaped df from wide to long format.
+
+    Parameters
+    ----------
+    numbers_df : pandas.DataFrame
+        The output of ``get_numbers_only``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section x respondent, with columns ``sec_name``,
+        ``category``, ``respondent``, ``rating``. The ``average``/
+        ``median`` columns are dropped since they aren't per-respondent
+        data.
+    """
     respondent_cols = [
         c for c in numbers_df.columns
         if c not in ("sec_name", "category", "average", "median")
@@ -323,14 +429,28 @@ def melt_by_category(numbers_df):
 
 
 def long_ratings(df):
-    """Every rating, one row per section x respondent. Shorthand for melt_by_category(get_numbers_only(df))."""
+    """Every rating, one row per section x respondent."""
     return melt_by_category(get_numbers_only(df))
 
 
 def section_stats(df, respondents=None):
     """
-    Per-section rating stats (mean, median, min, max, range = max - min),
-    optionally filtered to a subset of respondents.
+    Compute per-section rating statistics.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened, categorized df.
+    respondents : list of str, optional
+        If given, only ratings from these respondent ids (see
+        ``_respondent_ids``) are included.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section, with columns ``sec_name``, ``category``,
+        ``mean``, ``median``, ``min``, ``max``, and ``range`` (``max -
+        min``).
     """
     ratings = long_ratings(df)
     if respondents is not None:
@@ -347,10 +467,21 @@ def section_stats(df, respondents=None):
 
 def get_text_feedback(df):
     """
-    Long-format spreadsheet of free-text feedback: one row per question x respondent,
-    with the respondent's rating (where applicable) plus their "why" and "feedback" text.
-    
-    Rows where every text field is blank are dropped.
+    Build a long-format spreadsheet of free-text feedback.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened, categorized df.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section (or top-level question, see ``SUFFIX_NAMES``)
+        x respondent, with columns ``sec_name``, ``category``,
+        ``respondent``, ``rating`` (``None`` for the top-level questions),
+        ``why``, ``feedback``. Rows where every text field is blank are
+        dropped.
     """
     respondent_ids = _respondent_ids(df)
 
@@ -400,11 +531,21 @@ def _suffix_title(suffix_name):
 
 def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
     """
-    rows: list of (rating, text) tuples. Sorts by rating ascending and
-    inserts a separator between comments below LOW_RATING_THRESHOLD and
-    comments at or above it. Each comment is rendered as a blockquote with
-    the rating bolded on its own line, so multi-paragraph responses stay
-    grouped together instead of breaking out of a list item.
+    Render a section's rated comments as sorted, separated blockquotes.
+
+    Parameters
+    ----------
+    rows : list of tuple of (float, str)
+        ``(rating, text)`` pairs for one section.
+    low_rating_threshold : float, optional
+        Ratings below this value are grouped before a ``---`` separator
+        from ratings at or above it.
+
+    Returns
+    -------
+    list of str
+        Markdown lines: each comment as a blockquote with its rating
+        bolded on its own line, sorted by rating ascending.
     """
     sorted_rows = sorted(rows, key=lambda r: r[0])
     lines = []
@@ -425,15 +566,29 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
 
 def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
     """
-    Render a prepared df (see prepare_df) into a markdown feedback document.
+    Render a prepared df into a markdown feedback document.
+
     Sections are grouped by category (then P-order within category).
     Under each section's title, its average rating and every respondent's
-    individual rating (by name) are listed, sorted alphabetically by
-    respondent. Why and feedback comments are then pooled per section with
-    no respondent names shown, sorted by rating ascending, with a separator
-    between comments below LOW_RATING_THRESHOLD and comments at or above
-    it. Any top-level (non-section) text columns with content are appended
-    at the end.
+    individual rating (by name) are listed.
+    
+    Why and feedback comments are then pooled per section,
+    sorted by rating ascending, with a
+    separator between comments below ``low_rating_threshold`` and
+    comments at or above it. Any top-level (non-section) text columns with
+    content are appended at the end.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A df prepared by ``prepare_df``.
+    low_rating_threshold : float, optional
+        Passed through to ``_format_rated_comments``.
+
+    Returns
+    -------
+    str
+        The rendered markdown document.
     """
     text_df = get_text_feedback(df)
     ratings_df = long_ratings(df)
