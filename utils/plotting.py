@@ -26,10 +26,35 @@ BOX_FILL_OPACITY = 0.12
 BOX_LINE_OPACITY = 0.35
 
 
-def _rgba(hex_color, alpha):
-    hex_color = hex_color.lstrip("#")
-    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-    return f"rgba({r}, {g}, {b}, {alpha})"
+# ---------------------------------------------------------------------------
+# Public, potentially useful functions/helpers that are imported and used
+# outside this module (dashboard.py, explore.ipynb, etc).
+# ---------------------------------------------------------------------------
+
+
+def plot_ratings(df):
+    """
+    Build the interactive ratings box+strip plot directly from a prepared df.
+
+    Convenience wrapper: ``get_plot_data(df)`` then
+    ``build_ratings_figure(...)`` -- see ``build_ratings_figure`` for a
+    full description of what's plotted and how to interact with it.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A df prepared by ``combine.prepare_df`` (optionally anonymized via
+        ``combine.anonymize_respondents``).
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        The interactive ratings figure: a horizontal box+strip plot, one
+        box per section with every respondent's individual rating shown
+        as a jittered, hoverable point, colored by category, with buttons
+        to change the section sort order.
+    """
+    return build_ratings_figure(get_plot_data(df))
 
 
 def get_plot_data(df):
@@ -58,58 +83,6 @@ def get_plot_data(df):
     )
 
 
-def _wrap_for_hover(text, width=80):
-    """
-    Word-wrap text for a Plotly hover label.
-
-    Parameters
-    ----------
-    text : str
-        Text to wrap, may contain multiple paragraphs (newlines).
-    width : int, optional
-        Maximum characters per line.
-
-    Returns
-    -------
-    str
-        The text with ``<br>`` line breaks, ready to embed in a Plotly
-        ``hovertemplate``.
-    """
-    lines = []
-    for paragraph in str(text).splitlines():
-        lines.extend(textwrap.wrap(paragraph, width=width) or [""])
-    return "<br>".join(lines)
-
-
-def _hover_text(label, rating, why, feedback):
-    """
-    Build one point's hover label.
-
-    Parameters
-    ----------
-    label : str
-        Respondent identifier to show.
-    rating : float
-        The rating this point represents.
-    why : str or float
-        Why-this-rating text, or NaN if none was left.
-    feedback : str or float
-        What-would-increase-support text, or NaN if none was left.
-
-    Returns
-    -------
-    str
-        HTML-formatted hover text (bolded label/headings, ``<br>`` line
-        breaks), for use as a Plotly point's ``text``.
-    """
-    lines = [f"<b>{label}</b>", f"Rating: {rating:g}"]
-    if pd.notna(why):
-        lines.extend(["", "<b>Why</b>", _wrap_for_hover(why)])
-    if pd.notna(feedback):
-        lines.extend(["", "<b>What would increase support</b>", _wrap_for_hover(feedback)])
-    return "<br>".join(lines)
-
-
 def build_ratings_figure(plot_data):
     """
     Build the interactive ratings box+strip plot.
@@ -117,7 +90,7 @@ def build_ratings_figure(plot_data):
     Horizontal box+strip plot: one box per section (median line + mean
     line via boxmean, quartile range) with every respondent's individual
     rating shown as a jittered point on top.
-    
+
     Hovering a point shows the respondent id (whatever's in
     plot_data's "respondent" column -- anonymize upstream via
     combine.anonymize_respondents if needed) plus that respondent's rating
@@ -245,6 +218,64 @@ def build_ratings_figure(plot_data):
     return fig
 
 
-def plot_ratings(df):
-    """Convenience: build the ratings figure directly from a shortened, categorized df."""
-    return build_ratings_figure(get_plot_data(df))
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def _wrap_for_hover(text, width=80):
+    """
+    Word-wrap text for a Plotly hover label.
+
+    Parameters
+    ----------
+    text : str
+        Text to wrap, may contain multiple paragraphs (newlines).
+    width : int, optional
+        Maximum characters per line.
+
+    Returns
+    -------
+    str
+        The text with ``<br>`` line breaks, ready to embed in a Plotly
+        ``hovertemplate``.
+    """
+    lines = []
+    for paragraph in str(text).splitlines():
+        lines.extend(textwrap.wrap(paragraph, width=width) or [""])
+    return "<br>".join(lines)
+
+
+def _hover_text(label, rating, why, feedback):
+    """
+    Build one point's hover label.
+
+    Parameters
+    ----------
+    label : str
+        Respondent identifier to show.
+    rating : float
+        The rating this point represents.
+    why : str or float
+        Why-this-rating text, or NaN if none was left.
+    feedback : str or float
+        What-would-increase-support text, or NaN if none was left.
+
+    Returns
+    -------
+    str
+        HTML-formatted hover text (bolded label/headings, ``<br>`` line
+        breaks), for use as a Plotly point's ``text``.
+    """
+    lines = [f"<b>{label}</b>", f"Rating: {rating:g}"]
+    if pd.notna(why):
+        lines.extend(["", "<b>Why</b>", _wrap_for_hover(why)])
+    if pd.notna(feedback):
+        lines.extend(["", "<b>What would increase support</b>", _wrap_for_hover(feedback)])
+    return "<br>".join(lines)
