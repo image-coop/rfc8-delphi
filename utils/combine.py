@@ -151,144 +151,10 @@ SECTION_TITLE_TO_INDEX = {title: i for i, title in enumerate(SECTION_TITLES_RAW)
 SECTION_TITLE_TO_INDEX.update(ALTERNATE_SECTION_TITLES)
 
 
-def _coalesce(df, indices):
-    """
-    Pick the first non-null value across a set of columns, per row.
-
-    Used to merge a section's primary and alternate rating/why/feedback
-    columns when a spreadsheet happens to contain both.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        The raw (pre-rename) survey dataframe.
-    indices : list of int or None
-        Positional column indices to coalesce, in priority order. ``None``
-        entries are skipped.
-
-    Returns
-    -------
-    pandas.Series or float
-        The coalesced column, or ``float("nan")`` if no valid indices were
-        given.
-    """
-    series = [df.iloc[:, i] for i in indices if i is not None]
-    if not series:
-        return float("nan")
-    result = series[0]
-    for s in series[1:]:
-        result = result.combine_first(s)
-    return result
-
-
-def shorten_column_names(df):
-    """
-    Rename raw survey columns to unique, pythonic names by matching header text.
-
-    Matching rules
-    --------------
-    - Timestamp/group/name/top_changes/discussion_needed are matched by
-      exact text, wherever they appear.
-    - Each section's rating column is matched by its exact title text --
-      either the original wording in ``SECTION_TITLES_RAW``, or a
-      reworded variant registered in ``ALTERNATE_SECTION_TITLES`` to
-      handle different spreadsheet formats. The two columns immediately
-      following a matched title are taken as its why/feedback columns
-      (those are identical boilerplate text for every section, so can't
-      be matched by content).
-    - A section not found at all in this spreadsheet gets NaN-filled
-      rating/why/feedback columns instead of raising.
-    - If both a section's primary and alternate title appear as separate
-      columns in the same spreadsheet, their values are coalesced
-      per-respondent (see ``_coalesce``).
-    - Any column that doesn't match anything known is dropped (with a
-      printed warning).
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        Raw survey export, as read directly from CSV.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A new dataframe with columns ``timestamp``, ``group``, ``name``,
-        ``p{i}_<slug>``/``p{i}_why``/``p{i}_feedback`` for each section in
-        ``SECTION_SLUGS``, and ``top_changes``/``discussion_needed``.
-
-    Raises
-    ------
-    ValueError
-        If any fixed column or section is missing entirely from ``df``.
-    """
-    columns = list(df.columns)
-    used = [False] * len(columns)
-
-    matched_fixed = {}
-    for i, col in enumerate(columns):
-        if col in FIXED_COLUMNS:
-            matched_fixed[FIXED_COLUMNS[col]] = i
-            used[i] = True
-
-    matched_sections = {}
-    for i, col in enumerate(columns):
-        if used[i]:
-            continue
-        idx = SECTION_TITLE_TO_INDEX.get(col)
-        if idx is None:
-            continue
-        used[i] = True
-        why_idx = i + 1 if i + 1 < len(columns) and not used[i + 1] else None
-        feedback_idx = i + 2 if i + 2 < len(columns) and not used[i + 2] else None
-        if why_idx is not None:
-            used[why_idx] = True
-        if feedback_idx is not None:
-            used[feedback_idx] = True
-        matched_sections.setdefault(idx, []).append((i, why_idx, feedback_idx))
-
-    missing_fixed = [name for name in FIXED_COLUMNS.values() if name not in matched_fixed]
-    missing_sections = [i for i in range(len(SECTION_SLUGS)) if i not in matched_sections]
-    if missing_fixed or missing_sections:
-        raise ValueError(
-            f"Missing expected columns: fixed={missing_fixed}, "
-            f"sections={[SECTION_TITLES_RAW[i] for i in missing_sections]}"
-        )
-
-    dropped = [columns[i] for i in range(len(columns)) if not used[i]]
-    if dropped:
-        print(f"shorten_column_names: dropping unrecognized columns: {dropped}")
-
-    out = {name: df.iloc[:, matched_fixed[name]] for name in ("timestamp", "group", "name")}
-
-    for i, slug in enumerate(SECTION_SLUGS):
-        matches = matched_sections[i]
-        out[f"p{i}_{slug}"] = _coalesce(df, [m[0] for m in matches])
-        out[f"p{i}_why"] = _coalesce(df, [m[1] for m in matches])
-        out[f"p{i}_feedback"] = _coalesce(df, [m[2] for m in matches])
-
-    for name in SUFFIX_NAMES:
-        out[name] = df.iloc[:, matched_fixed[name]]
-
-    return pd.DataFrame(out)
-
-def categorize_ps(df):
-    """
-    Add a category column for every section.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        A df already processed by ``shorten_column_names``.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A copy of ``df`` with a ``p{i}_category`` column added for every section.
-    """
-    df = df.copy()
-    for i, category in P_CATEGORIES.items():
-        df[f"p{i}_category"] = category
-    return df
+# ---------------------------------------------------------------------------
+# Public, potentially useful functions/helpers that are imported and used
+# outside this module (plotting.py, dashboard.py, render_markdown.py, etc).
+# ---------------------------------------------------------------------------
 
 
 def prepare_df(raw_df):
@@ -296,42 +162,7 @@ def prepare_df(raw_df):
     Initial prep function before any other function can be used: shortens column
     names and adds p{i}_category columns.
     """
-    return categorize_ps(shorten_column_names(raw_df))
-
-
-def _is_blank(value):
-    return pd.isna(value) or not str(value).strip()
-
-
-def _respondent_ids(df):
-    """
-    Combine "group" and "other" into single respondents.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        A shortened df with ``group`` and ``name`` columns.
-
-    Returns
-    -------
-    list of str
-        One identifier per row: ``group`` alone, or ``"{group} - {name}"``
-        when ``name`` isn't blank (the "If other, please say which" case).
-
-    Raises
-    ------
-    ValueError
-        If two rows produce the same identifier.
-    """
-    ids = [
-        str(group).strip() if _is_blank(name) else f"{str(group).strip()} - {str(name).strip()}"
-        for group, name in zip(df["group"], df["name"])
-    ]
-    if len(ids) != len(set(ids)):
-        seen = set()
-        dupes = {r for r in ids if r in seen or seen.add(r)}
-        raise ValueError(f"Duplicate group/name combos: {sorted(dupes)}")
-    return ids
+    return _categorize_ps(_shorten_column_names(raw_df))
 
 
 def anonymize_respondents(df):
@@ -396,41 +227,9 @@ def get_numbers_only(df):
     return pd.DataFrame(records)
 
 
-def melt_by_category(numbers_df):
-    """
-    Convert a get_numbers_only-shaped df from wide to long format.
-
-    Parameters
-    ----------
-    numbers_df : pandas.DataFrame
-        The output of ``get_numbers_only``.
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per section x respondent, with columns ``sec_name``,
-        ``category``, ``respondent``, ``rating``. The ``average``/
-        ``median`` columns are dropped since they aren't per-respondent
-        data.
-    """
-    respondent_cols = [
-        c for c in numbers_df.columns
-        if c not in ("sec_name", "category", "average", "median")
-    ]
-
-    long = numbers_df.melt(
-        id_vars=["sec_name", "category"],
-        value_vars=respondent_cols,
-        var_name="respondent",
-        value_name="rating",
-    )
-
-    return long
-
-
 def long_ratings(df):
     """Every rating, one row per section x respondent."""
-    return melt_by_category(get_numbers_only(df))
+    return _melt_by_category(get_numbers_only(df))
 
 
 def section_stats(df, respondents=None):
@@ -525,45 +324,6 @@ def section_title(i, slug):
     return f"P{i}: {slug.replace('_', ' ').title()}"
 
 
-def _suffix_title(suffix_name):
-    return suffix_name.replace("_", " ").title()
-
-
-def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
-    """
-    Render a section's rated comments as sorted, separated blockquotes.
-
-    Parameters
-    ----------
-    rows : list of tuple of (float, str)
-        ``(rating, text)`` pairs for one section.
-    low_rating_threshold : float, optional
-        Ratings below this value are grouped before a ``---`` separator
-        from ratings at or above it.
-
-    Returns
-    -------
-    list of str
-        Markdown lines: each comment as a blockquote with its rating
-        bolded on its own line, sorted by rating ascending.
-    """
-    sorted_rows = sorted(rows, key=lambda r: r[0])
-    lines = []
-    separator_done = False
-    for rating, text in sorted_rows:
-        if not separator_done and rating >= low_rating_threshold:
-            if lines:
-                lines.append("---")
-                lines.append("")
-            separator_done = True
-        lines.append(f"> **{rating:g}**")
-        lines.append(">")
-        for paragraph in str(text).splitlines():
-            lines.append(f"> {paragraph}" if paragraph.strip() else ">")
-        lines.append("")
-    return lines
-
-
 def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
     """
     Render a prepared df into a markdown feedback document.
@@ -571,7 +331,7 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
     Sections are grouped by category (then P-order within category).
     Under each section's title, its average rating and every respondent's
     individual rating (by name) are listed.
-    
+
     Why and feedback comments are then pooled per section,
     sorted by rating ascending, with a
     separator between comments below ``low_rating_threshold`` and
@@ -672,4 +432,255 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
             lines.extend(block)
 
     return "\n".join(lines).rstrip() + "\n"
-    
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _shorten_column_names(df):
+    """
+    Rename raw survey columns to unique, pythonic names by matching header text.
+
+    Matching rules
+    --------------
+    - Timestamp/group/name/top_changes/discussion_needed are matched by
+      exact text, wherever they appear.
+    - Each section's rating column is matched by its exact title text --
+      either the original wording in ``SECTION_TITLES_RAW``, or a
+      reworded variant registered in ``ALTERNATE_SECTION_TITLES`` to
+      handle different spreadsheet formats. The two columns immediately
+      following a matched title are taken as its why/feedback columns
+      (those are identical boilerplate text for every section, so can't
+      be matched by content).
+    - A section not found at all in this spreadsheet gets NaN-filled
+      rating/why/feedback columns instead of raising.
+    - If both a section's primary and alternate title appear as separate
+      columns in the same spreadsheet, their values are coalesced
+      per-respondent (see ``_coalesce``).
+    - Any column that doesn't match anything known is dropped (with a
+      printed warning).
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw survey export, as read directly from CSV.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A new dataframe with columns ``timestamp``, ``group``, ``name``,
+        ``p{i}_<slug>``/``p{i}_why``/``p{i}_feedback`` for each section in
+        ``SECTION_SLUGS``, and ``top_changes``/``discussion_needed``.
+
+    Raises
+    ------
+    ValueError
+        If any fixed column or section is missing entirely from ``df``.
+    """
+    columns = list(df.columns)
+    used = [False] * len(columns)
+
+    matched_fixed = {}
+    for i, col in enumerate(columns):
+        if col in FIXED_COLUMNS:
+            matched_fixed[FIXED_COLUMNS[col]] = i
+            used[i] = True
+
+    matched_sections = {}
+    for i, col in enumerate(columns):
+        if used[i]:
+            continue
+        idx = SECTION_TITLE_TO_INDEX.get(col)
+        if idx is None:
+            continue
+        used[i] = True
+        why_idx = i + 1 if i + 1 < len(columns) and not used[i + 1] else None
+        feedback_idx = i + 2 if i + 2 < len(columns) and not used[i + 2] else None
+        if why_idx is not None:
+            used[why_idx] = True
+        if feedback_idx is not None:
+            used[feedback_idx] = True
+        matched_sections.setdefault(idx, []).append((i, why_idx, feedback_idx))
+
+    missing_fixed = [name for name in FIXED_COLUMNS.values() if name not in matched_fixed]
+    missing_sections = [i for i in range(len(SECTION_SLUGS)) if i not in matched_sections]
+    if missing_fixed or missing_sections:
+        raise ValueError(
+            f"Missing expected columns: fixed={missing_fixed}, "
+            f"sections={[SECTION_TITLES_RAW[i] for i in missing_sections]}"
+        )
+
+    dropped = [columns[i] for i in range(len(columns)) if not used[i]]
+    if dropped:
+        print(f"_shorten_column_names: dropping unrecognized columns: {dropped}")
+
+    out = {name: df.iloc[:, matched_fixed[name]] for name in ("timestamp", "group", "name")}
+
+    for i, slug in enumerate(SECTION_SLUGS):
+        matches = matched_sections[i]
+        out[f"p{i}_{slug}"] = _coalesce(df, [m[0] for m in matches])
+        out[f"p{i}_why"] = _coalesce(df, [m[1] for m in matches])
+        out[f"p{i}_feedback"] = _coalesce(df, [m[2] for m in matches])
+
+    for name in SUFFIX_NAMES:
+        out[name] = df.iloc[:, matched_fixed[name]]
+
+    return pd.DataFrame(out)
+
+
+def _categorize_ps(df):
+    """
+    Add a category column for every section.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A df already processed by ``_shorten_column_names``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of ``df`` with a ``p{i}_category`` column added for every section.
+    """
+    df = df.copy()
+    for i, category in P_CATEGORIES.items():
+        df[f"p{i}_category"] = category
+    return df
+
+
+def _coalesce(df, indices):
+    """
+    Pick the first non-null value across a set of columns, per row.
+
+    Used to merge a section's primary and alternate rating/why/feedback
+    columns when a spreadsheet happens to contain both.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The raw (pre-rename) survey dataframe.
+    indices : list of int or None
+        Positional column indices to coalesce, in priority order. ``None``
+        entries are skipped.
+
+    Returns
+    -------
+    pandas.Series or float
+        The coalesced column, or ``float("nan")`` if no valid indices were
+        given.
+    """
+    series = [df.iloc[:, i] for i in indices if i is not None]
+    if not series:
+        return float("nan")
+    result = series[0]
+    for s in series[1:]:
+        result = result.combine_first(s)
+    return result
+
+
+def _is_blank(value):
+    return pd.isna(value) or not str(value).strip()
+
+
+def _respondent_ids(df):
+    """
+    Combine "group" and "other" into single respondents.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened df with ``group`` and ``name`` columns.
+
+    Returns
+    -------
+    list of str
+        One identifier per row: ``group`` alone, or ``"{group} - {name}"``
+        when ``name`` isn't blank (the "If other, please say which" case).
+
+    Raises
+    ------
+    ValueError
+        If two rows produce the same identifier.
+    """
+    ids = [
+        str(group).strip() if _is_blank(name) else f"{str(group).strip()} - {str(name).strip()}"
+        for group, name in zip(df["group"], df["name"])
+    ]
+    if len(ids) != len(set(ids)):
+        seen = set()
+        dupes = {r for r in ids if r in seen or seen.add(r)}
+        raise ValueError(f"Duplicate group/name combos: {sorted(dupes)}")
+    return ids
+
+
+def _melt_by_category(numbers_df):
+    """
+    Convert a get_numbers_only-shaped df from wide to long format.
+
+    Parameters
+    ----------
+    numbers_df : pandas.DataFrame
+        The output of ``get_numbers_only``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section x respondent, with columns ``sec_name``,
+        ``category``, ``respondent``, ``rating``. The ``average``/
+        ``median`` columns are dropped since they aren't per-respondent
+        data.
+    """
+    respondent_cols = [
+        c for c in numbers_df.columns
+        if c not in ("sec_name", "category", "average", "median")
+    ]
+
+    long = numbers_df.melt(
+        id_vars=["sec_name", "category"],
+        value_vars=respondent_cols,
+        var_name="respondent",
+        value_name="rating",
+    )
+
+    return long
+
+
+def _suffix_title(suffix_name):
+    return suffix_name.replace("_", " ").title()
+
+
+def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
+    """
+    Render a section's rated comments as sorted, separated blockquotes.
+
+    Parameters
+    ----------
+    rows : list of tuple of (float, str)
+        ``(rating, text)`` pairs for one section.
+    low_rating_threshold : float, optional
+        Ratings below this value are grouped before a ``---`` separator
+        from ratings at or above it.
+
+    Returns
+    -------
+    list of str
+        Markdown lines: each comment as a blockquote with its rating
+        bolded on its own line, sorted by rating ascending.
+    """
+    sorted_rows = sorted(rows, key=lambda r: r[0])
+    lines = []
+    separator_done = False
+    for rating, text in sorted_rows:
+        if not separator_done and rating >= low_rating_threshold:
+            if lines:
+                lines.append("---")
+                lines.append("")
+            separator_done = True
+        lines.append(f"> **{rating:g}**")
+        lines.append(">")
+        for paragraph in str(text).splitlines():
+            lines.append(f"> {paragraph}" if paragraph.strip() else ">")
+        lines.append("")
+    return lines
