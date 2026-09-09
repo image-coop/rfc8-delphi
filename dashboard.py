@@ -49,8 +49,13 @@ def _():
 
 
 @app.cell
-def _(pd, prepare_df):
-    DATA_PATH = "resources/coop_delphi_r1_v3.csv"
+def _(mo, pd, prepare_df):
+    DATA_PATH = mo.cli_args().get("csv-path")
+    if not DATA_PATH:
+        raise ValueError(
+            "csv-path is required, e.g. "
+            "marimo edit --sandbox dashboard.py -- -csv-path path/to/csv"
+        )
 
     raw_df = pd.read_csv(DATA_PATH)
     df = prepare_df(raw_df)
