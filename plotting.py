@@ -65,34 +65,21 @@ def _hover_text(label, rating, why, feedback):
     return "<br>".join(lines)
 
 
-def _anonymous_labels(plot_data):
-    """Stable anonymous label ("Group 1", "Group 2", ...) per respondent id."""
-    respondents = sorted(plot_data["respondent"].unique())
-    return {r: f"Group {i + 1}" for i, r in enumerate(respondents)}
-
-
-def _display_names(plot_data):
-    """Human-readable name derived from each respondent id (e.g. "other_josh" -> "Other Josh")."""
-    return {r: r.replace("_", " ").title() for r in plot_data["respondent"].unique()}
-
-
 def build_ratings_figure(plot_data):
     """
     Horizontal box+strip plot: one box per section (median line + mean
     line via boxmean, quartile range) with every respondent's individual
     rating shown as a jittered point on top. Points are colored by the
     section's category (one trace per category, so the legend groups by
-    category). Hovering a point shows a per-respondent label plus that
-    respondent's rating and any why/feedback text; a toggle switches that
-    label between an anonymous "Group N" tag (default) and the
-    respondent's actual name. Buttons switch the section (y-axis) order
+    category). Hovering a point shows the respondent id (whatever's in
+    plot_data's "respondent" column -- anonymize upstream via
+    combine.anonymize_respondents if needed) plus that respondent's rating
+    and any why/feedback text. Buttons switch the section (y-axis) order
     between: ascending mean rating, descending mean rating, ascending
     minimum rating, and grouped by category (Overall, Building Blocks,
     Abstract Concepts, Core Classes, User Stories, Auxiliary -- top to
     bottom, same order as the legend).
     """
-    anonymous_labels = _anonymous_labels(plot_data)
-    display_names = _display_names(plot_data)
     rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
         .mean()
@@ -116,8 +103,6 @@ def build_ratings_figure(plot_data):
     ]
 
     fig = go.Figure()
-    anonymous_texts = []
-    named_texts = []
     for category in CATEGORY_ORDER:
         sec_names = [
             f"p{i}_{slug}"
@@ -127,17 +112,6 @@ def build_ratings_figure(plot_data):
         subset = plot_data[plot_data["sec_name"].isin(sec_names)]
         if subset.empty:
             continue
-
-        anon_text = [
-            _hover_text(anonymous_labels[r.respondent], r.rating, r.why, r.feedback)
-            for r in subset.itertuples()
-        ]
-        named_text = [
-            _hover_text(display_names[r.respondent], r.rating, r.why, r.feedback)
-            for r in subset.itertuples()
-        ]
-        anonymous_texts.append(anon_text)
-        named_texts.append(named_text)
 
         color = CATEGORY_COLORS[category]
         fig.add_trace(
@@ -150,7 +124,10 @@ def build_ratings_figure(plot_data):
                 pointpos=0,
                 boxmean=True,
                 orientation="h",
-                text=anon_text,
+                text=[
+                    _hover_text(r.respondent, r.rating, r.why, r.feedback)
+                    for r in subset.itertuples()
+                ],
                 hovertemplate="%{text}<extra></extra>",
                 hoveron="points",
                 fillcolor=_rgba(color, BOX_FILL_OPACITY),
@@ -171,14 +148,7 @@ def build_ratings_figure(plot_data):
         boxmode="overlay",
         height=max(400, 28 * len(SECTION_SLUGS) + 150),
         legend_title_text="Category",
-        legend={
-            "itemclick": False,
-            "itemdoubleclick": False,
-            "x": 1.02,
-            "xanchor": "left",
-            "y": 1,
-            "yanchor": "top",
-        },
+        legend={"itemclick": False, "itemdoubleclick": False},
         updatemenus=[
             {
                 "type": "buttons",
@@ -207,27 +177,6 @@ def build_ratings_figure(plot_data):
                         "label": "Group by category",
                         "method": "relayout",
                         "args": [{"yaxis.categoryarray": category_order}],
-                    },
-                ],
-            },
-            {
-                "type": "buttons",
-                "direction": "down",
-                "x": 1.02,
-                "xanchor": "left",
-                "y": 0.8,
-                "yanchor": "top",
-                "active": 0,
-                "buttons": [
-                    {
-                        "label": "Anonymous",
-                        "method": "restyle",
-                        "args": [{"text": anonymous_texts}],
-                    },
-                    {
-                        "label": "Show names",
-                        "method": "restyle",
-                        "args": [{"text": named_texts}],
                     },
                 ],
             },

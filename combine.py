@@ -1,5 +1,3 @@
-import re
-
 import pandas as pd
 
 SECTION_SLUGS = [
@@ -240,18 +238,13 @@ def categorize_ps(df):
         df[f"p{i}_category"] = category
     return df
 
-def _slugify(text):
-    text = re.sub(r"[^a-z0-9]+", "_", str(text).strip().lower())
-    return text.strip("_")
-
-
 def _is_blank(value):
     return pd.isna(value) or not str(value).strip()
 
 
 def _respondent_ids(df):
     ids = [
-        _slugify(group) if _is_blank(name) else f"{_slugify(group)}_{_slugify(name)}"
+        str(group).strip() if _is_blank(name) else f"{str(group).strip()} - {str(name).strip()}"
         for group, name in zip(df["group"], df["name"])
     ]
     if len(ids) != len(set(ids)):
@@ -259,6 +252,24 @@ def _respondent_ids(df):
         dupes = {r for r in ids if r in seen or seen.add(r)}
         raise ValueError(f"Duplicate group/name combos: {sorted(dupes)}")
     return ids
+
+
+def anonymize_respondents(df):
+    """
+    Return a copy of a shortened/categorized df with group/name replaced by
+    generic labels ("Group 1", "Group 2", ...), assigned in a stable order
+    (sorted by the existing respondent id) so re-running gives the same
+    mapping. Apply this before get_numbers_only/get_text_feedback/
+    get_plot_data if you want anonymous output -- those functions and
+    plot_ratings always just display whatever's in group/name as-is.
+    """
+    ids = _respondent_ids(df)
+    order = {respondent_id: i + 1 for i, respondent_id in enumerate(sorted(set(ids)))}
+
+    df = df.copy()
+    df["group"] = [f"Group {order[respondent_id]}" for respondent_id in ids]
+    df["name"] = float("nan")
+    return df
 
 
 def get_numbers_only(df):
