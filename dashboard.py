@@ -17,6 +17,7 @@ def _():
         LOW_RATING_THRESHOLD,
         categorize_ps,
         get_numbers_only,
+        get_text_feedback,
         section_stats,
         shorten_column_names,
     )
@@ -30,6 +31,7 @@ def _():
         SECTION_TITLES,
         categorize_ps,
         get_numbers_only,
+        get_text_feedback,
         go,
         mo,
         pd,
@@ -174,20 +176,22 @@ def _(df, mo, plot_ratings):
 
 
 @app.cell
-def _(mo, pd):
-    # Will become get_text_feedback(df) from combine.py.
-    feedback_dummy = pd.DataFrame(
-        {
-            "Respondent": ["Other - Josh", "GerBI (Damien)"],
-            "Category": ["overall", "core_classes"],
-            "Why": ["Placeholder why text...", "Another placeholder why..."],
-            "What would increase support?": ["Lorem ipsum is a dummy or placeholder text commonly used in graphic design, publishing, and web development. It is typically a corrupted version of De finibus bonorum et malorum, a 1st-century BC text by the Roman statesman and philosopher Cicero, with words altered, added, and removed to make it nonsensical and improper Latin. The first two words are the truncation of dolorem ipsum. Lorem ipsum's purpose is to permit a page layout to be designed,"+
-            "\n\n"+
-            "independently of the copy that will subsequently populate it, or to demonstrate various fonts of a typeface without meaningful text", "More placeholder feedback..."],
+def _(CATEGORY_TITLES, SECTION_TITLES, df, get_text_feedback, mo):
+    feedback_df = get_text_feedback(df)[["respondent", "sec_name", "category", "why", "feedback"]].copy()
+    feedback_df["category"] = feedback_df["category"].map(CATEGORY_TITLES)
+    feedback_df["sec_name"] = feedback_df["sec_name"].map(SECTION_TITLES)
+    feedback_df = feedback_df.rename(
+        columns={
+            "respondent": "Respondent",
+            "sec_name": "Section",
+            "category": "Category",
+            "why": "Why",
+            "feedback": "What would increase support?",
         }
-    )
+    ).fillna("")
+
     feedback_table = mo.ui.table(
-        feedback_dummy,
+        feedback_df.to_dict("records"),
         selection=None,
         wrapped_columns=["Why", "What would increase support?"],
     )
