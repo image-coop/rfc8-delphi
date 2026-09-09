@@ -312,6 +312,24 @@ def melt_by_category(numbers_df):
     return long
 
 
+def section_stats(df, respondents=None):
+    """
+    Per-section rating stats (mean, median, min, max, range = max - min),
+    optionally filtered to a subset of respondents.
+    """
+    long_ratings = melt_by_category(get_numbers_only(df))
+    if respondents is not None:
+        long_ratings = long_ratings[long_ratings["respondent"].isin(respondents)]
+
+    stats = (
+        long_ratings.groupby(["sec_name", "category"])["rating"]
+        .agg(mean="mean", median="median", min="min", max="max")
+        .reset_index()
+    )
+    stats["range"] = stats["max"] - stats["min"]
+    return stats
+
+
 def get_text_feedback(df):
     """
     Long-format spreadsheet of free-text feedback: one row per question x respondent,

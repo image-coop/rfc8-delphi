@@ -10,7 +10,47 @@ def _():
     import pandas as pd
     import plotly.graph_objects as go
 
-    return go, mo, pd
+    from combine import (
+        CATEGORY_ORDER,
+        CATEGORY_OVERALL,
+        CATEGORY_TITLES,
+        LOW_RATING_THRESHOLD,
+        categorize_ps,
+        get_numbers_only,
+        section_stats,
+        shorten_column_names,
+    )
+    from plotting import SECTION_TITLES
+
+    return (
+        CATEGORY_ORDER,
+        CATEGORY_OVERALL,
+        CATEGORY_TITLES,
+        LOW_RATING_THRESHOLD,
+        SECTION_TITLES,
+        categorize_ps,
+        get_numbers_only,
+        go,
+        mo,
+        pd,
+        section_stats,
+        shorten_column_names,
+    )
+
+
+@app.cell
+def _(categorize_ps, pd, shorten_column_names):
+    DATA_PATH = "resources/all_delphi_r1_v3.csv"
+
+    raw_df = pd.read_csv(DATA_PATH)
+    df = categorize_ps(shorten_column_names(raw_df))
+    return (df,)
+
+
+@app.cell
+def _(df, section_stats):
+    stats = section_stats(df)
+    return (stats,)
 
 
 @app.cell
@@ -22,35 +62,47 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
-    # Structure-only placeholder. Will become the real respondent list.
-    respondent_options = ["Other - Josh", "Other - Juan Nunez-Iglesias", "GerBI (Damien)", "Fideus"]
-
-    respondents_line = mo.md(f"**Respondents:** {', '.join(respondent_options)}")
+def _(get_numbers_only, df, mo):
+    respondent_ids = sorted(
+        c for c in get_numbers_only(df).columns
+        if c not in ("sec_name", "category", "average", "median")
+    )
+    respondents_line = mo.md(f"**Respondents:** {', '.join(respondent_ids)}")
     return (respondents_line,)
 
 
 @app.cell
-def _(go, mo):
-    # Structure-only placeholder values.
-    summary_pie = go.Figure(go.Pie(labels=["Under threshold", "Over threshold"], values=[12, 24], hole=0.4))
+def _(CATEGORY_ORDER, CATEGORY_OVERALL, CATEGORY_TITLES, LOW_RATING_THRESHOLD, go, mo, stats):
+    below_threshold = int((stats["mean"] < LOW_RATING_THRESHOLD).sum())
+    at_or_above_threshold = int((stats["mean"] >= LOW_RATING_THRESHOLD).sum())
+
+    summary_pie = go.Figure(
+        go.Pie(
+            labels=["Under threshold", "At/above threshold"],
+            values=[below_threshold, at_or_above_threshold],
+            hole=0.4,
+        )
+    )
     summary_pie.update_layout(
-        title="Threshold: 70",
+        title=f"Avg. Section Ratings Above and Below {LOW_RATING_THRESHOLD:g}",
         height=250,
         margin={"t": 40, "b": 10, "l": 10, "r": 10},
     )
 
-    summary_text = mo.md(
-        """
-        **Overall proposal**: 65.2
+    p0_avg = stats.loc[stats["sec_name"] == "p0_overall_proposal", "mean"].iloc[0]
+    category_avgs = stats.groupby("category")["mean"].mean()
+    category_lines = "\n".join(
+        f"- **{CATEGORY_TITLES[category]}**: {category_avgs[category]:.1f}"
+        for category in CATEGORY_ORDER
+        if category != CATEGORY_OVERALL
+    )
 
-        **Categories**
-        - Building Blocks: 68.1
-        - Abstract Concepts: 70.4
-        - Core Classes: 63.8
-        - User Stories: 85.2
-        - Auxiliary: 66.7
-        """
+    summary_text = mo.md(f"""
+Average ratings across respondents and sections by category:
+
+- **Overall proposal**: {p0_avg:.1f}
+{category_lines}
+"""
     )
 
     summary_card = mo.vstack([mo.md("### Summary"), summary_text, mo.ui.plotly(summary_pie)])
@@ -58,45 +110,47 @@ def _(go, mo):
 
 
 @app.cell
-def _(mo, pd):
-    # Structure-only placeholder rows.
+def _(mo):
     lowest5_metric = mo.ui.radio(options=["Average", "Median", "Min"], value="Average", label="Rank by")
+    return (lowest5_metric,)
 
-    lowest5_dummy = pd.DataFrame(
-        {
-            "Section": [
-                "P16: HCS",
-                "P4: Consolidated Metadata",
-                "P34: Compatibility",
-                "P17: Core Class Changes Covered",
-                "P35: Security",
-            ],
-            "Rating": [42, 44, 46, 53, 54],
-        }
+
+@app.cell
+def _(SECTION_TITLES, lowest5_metric, mo, stats):
+
+    lowest5_description = mo.md(
+        "Lowest ranked sections. Ranked by average or median across all groups" \
+        "or minimum individual rating received."
     )
+    lowest5_metric_col = {"Average": "mean", "Median": "median", "Min": "min"}[lowest5_metric.value]
 
-    lowest5_card = mo.vstack([mo.md("### Lowest 5"), lowest5_metric, mo.ui.table(lowest5_dummy, selection=None)])
+    lowest5_df = stats.sort_values(lowest5_metric_col).head(5)[["sec_name", lowest5_metric_col]]
+    lowest5_df = lowest5_df.rename(columns={"sec_name": "Section", lowest5_metric_col: "Rating"})
+    lowest5_df["Section"] = lowest5_df["Section"].map(SECTION_TITLES)
+
+    lowest5_table = mo.ui.table(
+        lowest5_df.to_dict("records"),
+        selection=None,
+        format_mapping={"Rating": lambda v: f"{v:.1f}"},
+    )
+    lowest5_card = mo.vstack([mo.md("### Lowest 5"), lowest5_description, lowest5_metric, lowest5_table])
     return (lowest5_card,)
 
 
 @app.cell
-def _(mo, pd):
-    # Structure-only placeholder rows.
-    controversial5_dummy = pd.DataFrame(
-        {
-            "Section": [
-                "P7: Attributes",
-                "P17: Core Class Changes Covered",
-                "P25: Rendering Settings",
-                "P8: Metadata Storage",
-                "P32: Prior Art",
-            ],
-            "Avg. Rating": [59, 53, 77, 68, 73],
-            "Range": [75, 75, 70, 70, 70],
-        }
+def _(SECTION_TITLES, mo, stats):
+    controversial5_df = stats.sort_values("range", ascending=False).head(5)[["sec_name", "mean", "range"]]
+    controversial5_df = controversial5_df.rename(
+        columns={"sec_name": "Section", "mean": "Avg. Rating", "range": "Range"}
     )
+    controversial5_df["Section"] = controversial5_df["Section"].map(SECTION_TITLES)
 
-    controversial5_card = mo.vstack([mo.md("### Controversial 5"), mo.ui.table(controversial5_dummy, selection=None)])
+    controversial5_table = mo.ui.table(
+        controversial5_df.to_dict("records"),
+        selection=None,
+        format_mapping={"Avg. Rating": lambda v: f"{v:.1f}"},
+    )
+    controversial5_card = mo.vstack([mo.md("### Controversial 5"), controversial5_table])
     return (controversial5_card,)
 
 
@@ -106,6 +160,7 @@ def _(controversial5_card, lowest5_card, mo, summary_card):
         [summary_card, lowest5_card, controversial5_card],
         justify="space-between",
         align="start",
+        widths="equal",
         gap=1,
     )
     return (top_row,)
