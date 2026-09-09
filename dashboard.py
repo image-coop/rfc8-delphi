@@ -43,7 +43,7 @@ def _():
 
 @app.cell
 def _(categorize_ps, pd, shorten_column_names):
-    DATA_PATH = "resources/all_delphi_r1_v3.csv"
+    DATA_PATH = "resources/coop_delphi_r1_v3.csv"
 
     raw_df = pd.read_csv(DATA_PATH)
     df = categorize_ps(shorten_column_names(raw_df))

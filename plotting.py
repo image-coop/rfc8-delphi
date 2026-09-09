@@ -76,9 +76,10 @@ def build_ratings_figure(plot_data):
     combine.anonymize_respondents if needed) plus that respondent's rating
     and any why/feedback text. Buttons switch the section (y-axis) order
     between: ascending mean rating, descending mean rating, ascending
-    minimum rating, and grouped by category (Overall, Building Blocks,
-    Abstract Concepts, Core Classes, User Stories, Auxiliary -- top to
-    bottom, same order as the legend).
+    minimum rating, descending range (max - min, most divisive first), and
+    grouped by category (Overall, Building Blocks, Abstract Concepts,
+    Core Classes, User Stories, Auxiliary -- top to bottom, same order as
+    the legend).
     """
     rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
@@ -95,6 +96,8 @@ def build_ratings_figure(plot_data):
         .index.map(SECTION_TITLES)
         .tolist()
     )
+    rating_range = plot_data.groupby("sec_name")["rating"].agg(lambda s: s.max() - s.min())
+    rating_order_range = rating_range.sort_values(ascending=False).index.map(SECTION_TITLES).tolist()
     category_order = [
         SECTION_TITLES[f"p{i}_{slug}"]
         for category in CATEGORY_ORDER
@@ -155,7 +158,7 @@ def build_ratings_figure(plot_data):
                 "direction": "right",
                 "x": 1,
                 "xanchor": "right",
-                "y": 1.08,
+                "y": 1.03,
                 "yanchor": "bottom",
                 "buttons": [
                     {
@@ -172,6 +175,11 @@ def build_ratings_figure(plot_data):
                         "label": "Sort by minimum",
                         "method": "relayout",
                         "args": [{"yaxis.categoryarray": rating_order_min}],
+                    },
+                    {
+                        "label": "Sort by range",
+                        "method": "relayout",
+                        "args": [{"yaxis.categoryarray": rating_order_range}],
                     },
                     {
                         "label": "Group by category",
