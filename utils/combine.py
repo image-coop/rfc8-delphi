@@ -238,6 +238,16 @@ def categorize_ps(df):
         df[f"p{i}_category"] = category
     return df
 
+
+def prepare_df(raw_df):
+    """
+    The one required prep step for a raw survey export before any other
+    function in this module (or plotting.py) can be used: shortens column
+    names and adds p{i}_category columns.
+    """
+    return categorize_ps(shorten_column_names(raw_df))
+
+
 def _is_blank(value):
     return pd.isna(value) or not str(value).strip()
 
@@ -312,17 +322,22 @@ def melt_by_category(numbers_df):
     return long
 
 
+def long_ratings(df):
+    """Every rating, one row per section x respondent. Shorthand for melt_by_category(get_numbers_only(df))."""
+    return melt_by_category(get_numbers_only(df))
+
+
 def section_stats(df, respondents=None):
     """
     Per-section rating stats (mean, median, min, max, range = max - min),
     optionally filtered to a subset of respondents.
     """
-    long_ratings = melt_by_category(get_numbers_only(df))
+    ratings = long_ratings(df)
     if respondents is not None:
-        long_ratings = long_ratings[long_ratings["respondent"].isin(respondents)]
+        ratings = ratings[ratings["respondent"].isin(respondents)]
 
     stats = (
-        long_ratings.groupby(["sec_name", "category"])["rating"]
+        ratings.groupby(["sec_name", "category"])["rating"]
         .agg(mean="mean", median="median", min="min", max="max")
         .reset_index()
     )
@@ -408,19 +423,21 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
     return lines
 
 
-def render_feedback_markdown(text_df, ratings_df, low_rating_threshold=LOW_RATING_THRESHOLD):
+def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
     """
-    Render a get_text_feedback spreadsheet into a markdown document.
+    Render a prepared df (see prepare_df) into a markdown feedback document.
     Sections are grouped by category (then P-order within category).
     Under each section's title, its average rating and every respondent's
-    individual rating (by name, from ratings_df -- e.g.
-    melt_by_category(get_numbers_only(df))) are listed, sorted
-    alphabetically by respondent. Why and feedback comments are then pooled
-    per section with no respondent names shown, sorted by rating ascending,
-    with a separator between comments below LOW_RATING_THRESHOLD and
-    comments at or above it. Any top-level (non-section) text columns with
-    content are appended at the end.
+    individual rating (by name) are listed, sorted alphabetically by
+    respondent. Why and feedback comments are then pooled per section with
+    no respondent names shown, sorted by rating ascending, with a separator
+    between comments below LOW_RATING_THRESHOLD and comments at or above
+    it. Any top-level (non-section) text columns with content are appended
+    at the end.
     """
+    text_df = get_text_feedback(df)
+    ratings_df = long_ratings(df)
+
     lines = ["# RFC-8 Delphi Feedback", ""]
 
     for category in CATEGORY_ORDER:

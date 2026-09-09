@@ -15,11 +15,10 @@ def _():
         CATEGORY_OVERALL,
         CATEGORY_TITLES,
         LOW_RATING_THRESHOLD,
-        categorize_ps,
         get_numbers_only,
         get_text_feedback,
+        prepare_df,
         section_stats,
-        shorten_column_names,
     )
     from utils.plotting import SECTION_TITLES, plot_ratings
 
@@ -29,24 +28,23 @@ def _():
         CATEGORY_TITLES,
         LOW_RATING_THRESHOLD,
         SECTION_TITLES,
-        categorize_ps,
         get_numbers_only,
         get_text_feedback,
         go,
         mo,
         pd,
         plot_ratings,
+        prepare_df,
         section_stats,
-        shorten_column_names,
     )
 
 
 @app.cell
-def _(categorize_ps, pd, shorten_column_names):
+def _(pd, prepare_df):
     DATA_PATH = "resources/coop_delphi_r1_v3.csv"
 
     raw_df = pd.read_csv(DATA_PATH)
-    df = categorize_ps(shorten_column_names(raw_df))
+    df = prepare_df(raw_df)
     return (df,)
 
 

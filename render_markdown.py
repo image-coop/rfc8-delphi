@@ -6,7 +6,7 @@
   # ///
 import pandas as pd
 
-from utils.combine import get_numbers_only, get_text_feedback, melt_by_category, render_feedback_markdown, categorize_ps, shorten_column_names
+from utils.combine import prepare_df, render_feedback_markdown
 import sys
 
 if __name__ == "__main__":
@@ -17,12 +17,8 @@ if __name__ == "__main__":
     csv_pth = sys.argv[1]
     md_pth = sys.argv[2]
 
-    df = pd.read_csv(csv_pth)
-    df = categorize_ps(shorten_column_names(df))
-    text_df = get_text_feedback(df)
-    ratings_df = melt_by_category(get_numbers_only(df))
-
-    rendered_feedback = render_feedback_markdown(text_df, ratings_df)
+    df = prepare_df(pd.read_csv(csv_pth))
+    rendered_feedback = render_feedback_markdown(df)
     with open(md_pth, "w") as f:
         f.write(rendered_feedback)
     print(f"Rendered feedback written to {md_pth}")

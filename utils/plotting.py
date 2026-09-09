@@ -9,9 +9,8 @@ from utils.combine import (
     CATEGORY_TITLES,
     P_CATEGORIES,
     SECTION_SLUGS,
-    get_numbers_only,
     get_text_feedback,
-    melt_by_category,
+    long_ratings,
     section_title,
 )
 
@@ -39,7 +38,7 @@ def get_plot_data(df):
     feedback text where they left any (NaN otherwise). Built by joining
     get_numbers_only's ratings with get_text_feedback's text.
     """
-    long = melt_by_category(get_numbers_only(df)).dropna(subset=["rating"])
+    long = long_ratings(df).dropna(subset=["rating"])
     text = get_text_feedback(df)
 
     return long.merge(
