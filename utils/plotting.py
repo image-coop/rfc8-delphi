@@ -34,9 +34,19 @@ def _rgba(hex_color, alpha):
 
 def get_plot_data(df):
     """
-    One row per section x respondent rating, with that respondent's why/
-    feedback text where they left any (NaN otherwise). Built by joining
-    get_numbers_only's ratings with get_text_feedback's text.
+    Join ratings with respondent text feedback for plotting.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened, categorized df.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per section x respondent rating,
+        with that respondent's ``why``/``feedback`` text where
+        they left any (NaN otherwise).
     """
     long = long_ratings(df).dropna(subset=["rating"])
     text = get_text_feedback(df)
@@ -48,7 +58,23 @@ def get_plot_data(df):
     )
 
 
-def _wrap_for_hover(text, width=60):
+def _wrap_for_hover(text, width=80):
+    """
+    Word-wrap text for a Plotly hover label.
+
+    Parameters
+    ----------
+    text : str
+        Text to wrap, may contain multiple paragraphs (newlines).
+    width : int, optional
+        Maximum characters per line.
+
+    Returns
+    -------
+    str
+        The text with ``<br>`` line breaks, ready to embed in a Plotly
+        ``hovertemplate``.
+    """
     lines = []
     for paragraph in str(text).splitlines():
         lines.extend(textwrap.wrap(paragraph, width=width) or [""])
@@ -56,6 +82,26 @@ def _wrap_for_hover(text, width=60):
 
 
 def _hover_text(label, rating, why, feedback):
+    """
+    Build one point's hover label.
+
+    Parameters
+    ----------
+    label : str
+        Respondent identifier to show.
+    rating : float
+        The rating this point represents.
+    why : str or float
+        Why-this-rating text, or NaN if none was left.
+    feedback : str or float
+        What-would-increase-support text, or NaN if none was left.
+
+    Returns
+    -------
+    str
+        HTML-formatted hover text (bolded label/headings, ``<br>`` line
+        breaks), for use as a Plotly point's ``text``.
+    """
     lines = [f"<b>{label}</b>", f"Rating: {rating:g}"]
     if pd.notna(why):
         lines.extend(["", "<b>Why</b>", _wrap_for_hover(why)])
@@ -66,19 +112,26 @@ def _hover_text(label, rating, why, feedback):
 
 def build_ratings_figure(plot_data):
     """
+    Build the interactive ratings box+strip plot.
+
     Horizontal box+strip plot: one box per section (median line + mean
     line via boxmean, quartile range) with every respondent's individual
-    rating shown as a jittered point on top. Points are colored by the
-    section's category (one trace per category, so the legend groups by
-    category). Hovering a point shows the respondent id (whatever's in
+    rating shown as a jittered point on top.
+    
+    Hovering a point shows the respondent id (whatever's in
     plot_data's "respondent" column -- anonymize upstream via
     combine.anonymize_respondents if needed) plus that respondent's rating
-    and any why/feedback text. Buttons switch the section (y-axis) order
-    between: ascending mean rating, descending mean rating, ascending
-    minimum rating, descending range (max - min, most divisive first), and
-    grouped by category (Overall, Building Blocks, Abstract Concepts,
-    Core Classes, User Stories, Auxiliary -- top to bottom, same order as
-    the legend).
+    and any why/feedback text.
+
+    Parameters
+    ----------
+    plot_data : pandas.DataFrame
+        The output of ``get_plot_data``.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        The interactive figure.
     """
     rating_order_asc = (
         plot_data.groupby("sec_name")["rating"]
