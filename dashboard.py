@@ -20,7 +20,7 @@ def _():
         section_stats,
         shorten_column_names,
     )
-    from plotting import SECTION_TITLES
+    from plotting import SECTION_TITLES, plot_ratings
 
     return (
         CATEGORY_ORDER,
@@ -33,6 +33,7 @@ def _():
         go,
         mo,
         pd,
+        plot_ratings,
         section_stats,
         shorten_column_names,
     )
@@ -167,14 +168,8 @@ def _(controversial5_card, lowest5_card, mo, summary_card):
 
 
 @app.cell
-def _(go, mo):
-    # Will become plot_ratings(df) from plotting.py.
-    plot_placeholder_fig = go.Figure()
-    plot_placeholder_fig.update_layout(
-        height=500,
-        annotations=[{"text": "Plot Ratings goes here", "showarrow": False, "font": {"size": 20}}],
-    )
-    plot_ratings_card = mo.vstack([mo.md("## Plot Ratings"), mo.ui.plotly(plot_placeholder_fig)])
+def _(df, mo, plot_ratings):
+    plot_ratings_card = mo.vstack([mo.md("## Plot Ratings"), mo.ui.plotly(plot_ratings(df))])
     return (plot_ratings_card,)
 
 
