@@ -10,7 +10,7 @@ def _():
     import pandas as pd
     import plotly.graph_objects as go
 
-    from combine import (
+    from utils.combine import (
         CATEGORY_ORDER,
         CATEGORY_OVERALL,
         CATEGORY_TITLES,
@@ -21,7 +21,7 @@ def _():
         section_stats,
         shorten_column_names,
     )
-    from plotting import SECTION_TITLES, plot_ratings
+    from utils.plotting import SECTION_TITLES, plot_ratings
 
     return (
         CATEGORY_ORDER,
