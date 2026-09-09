@@ -1,13 +1,14 @@
-  # /// script
-  # requires-python = ">=3.10"
-  # dependencies = [
-  #     "pandas",
-  # ]
-  # ///
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "pandas",
+# ]
+# ///
+import sys
+
 import pandas as pd
 
 from utils.combine import prepare_df, render_feedback_markdown
-import sys
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

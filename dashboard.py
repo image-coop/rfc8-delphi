@@ -79,7 +79,8 @@ def _(mo):
 @app.cell
 def _(get_numbers_only, df, mo):
     respondent_ids = sorted(
-        c for c in get_numbers_only(df).columns
+        c
+        for c in get_numbers_only(df).columns
         if c not in ("sec_name", "category", "average", "median")
     )
     respondents_line = mo.md(f"**Respondents:** {', '.join(respondent_ids)}")
@@ -87,7 +88,15 @@ def _(get_numbers_only, df, mo):
 
 
 @app.cell
-def _(CATEGORY_ORDER, CATEGORY_OVERALL, CATEGORY_TITLES, LOW_RATING_THRESHOLD, go, mo, stats):
+def _(
+    CATEGORY_ORDER,
+    CATEGORY_OVERALL,
+    CATEGORY_TITLES,
+    LOW_RATING_THRESHOLD,
+    go,
+    mo,
+    stats,
+):
     below_threshold = int((stats["mean"] < LOW_RATING_THRESHOLD).sum())
     at_or_above_threshold = int((stats["mean"] >= LOW_RATING_THRESHOLD).sum())
 
@@ -117,30 +126,38 @@ Average ratings across respondents and sections by category:
 
 - **Overall proposal**: {p0_avg:.1f}
 {category_lines}
-"""
-    )
+""")
 
-    summary_card = mo.vstack([mo.md("### Summary"), summary_text, mo.ui.plotly(summary_pie)])
+    summary_card = mo.vstack(
+        [mo.md("### Summary"), summary_text, mo.ui.plotly(summary_pie)]
+    )
     return (summary_card,)
 
 
 @app.cell
 def _(mo):
-    lowest5_metric = mo.ui.radio(options=["Average", "Median", "Min"], value="Average", label="Rank by")
+    lowest5_metric = mo.ui.radio(
+        options=["Average", "Median", "Min"], value="Average", label="Rank by"
+    )
     return (lowest5_metric,)
 
 
 @app.cell
 def _(SECTION_TITLES, lowest5_metric, mo, stats):
-
     lowest5_description = mo.md(
-        "Lowest ranked sections. Ranked by average or median across all groups" \
+        "Lowest ranked sections. Ranked by average or median across all groups"
         "or minimum individual rating received."
     )
-    lowest5_metric_col = {"Average": "mean", "Median": "median", "Min": "min"}[lowest5_metric.value]
+    lowest5_metric_col = {"Average": "mean", "Median": "median", "Min": "min"}[
+        lowest5_metric.value
+    ]
 
-    lowest5_df = stats.sort_values(lowest5_metric_col).head(5)[["sec_name", lowest5_metric_col]]
-    lowest5_df = lowest5_df.rename(columns={"sec_name": "Section", lowest5_metric_col: "Rating"})
+    lowest5_df = stats.sort_values(lowest5_metric_col).head(5)[
+        ["sec_name", lowest5_metric_col]
+    ]
+    lowest5_df = lowest5_df.rename(
+        columns={"sec_name": "Section", lowest5_metric_col: "Rating"}
+    )
     lowest5_df["Section"] = lowest5_df["Section"].map(SECTION_TITLES)
 
     lowest5_table = mo.ui.table(
@@ -148,13 +165,17 @@ def _(SECTION_TITLES, lowest5_metric, mo, stats):
         selection=None,
         format_mapping={"Rating": lambda v: f"{v:.1f}"},
     )
-    lowest5_card = mo.vstack([mo.md("### Lowest 5"), lowest5_description, lowest5_metric, lowest5_table])
+    lowest5_card = mo.vstack(
+        [mo.md("### Lowest 5"), lowest5_description, lowest5_metric, lowest5_table]
+    )
     return (lowest5_card,)
 
 
 @app.cell
 def _(SECTION_TITLES, mo, stats):
-    controversial5_df = stats.sort_values("range", ascending=False).head(5)[["sec_name", "mean", "range"]]
+    controversial5_df = stats.sort_values("range", ascending=False).head(5)[
+        ["sec_name", "mean", "range"]
+    ]
     controversial5_df = controversial5_df.rename(
         columns={"sec_name": "Section", "mean": "Avg. Rating", "range": "Range"}
     )
@@ -165,7 +186,9 @@ def _(SECTION_TITLES, mo, stats):
         selection=None,
         format_mapping={"Avg. Rating": lambda v: f"{v:.1f}"},
     )
-    controversial5_card = mo.vstack([mo.md("### Controversial 5"), controversial5_table])
+    controversial5_card = mo.vstack(
+        [mo.md("### Controversial 5"), controversial5_table]
+    )
     return (controversial5_card,)
 
 
@@ -183,13 +206,17 @@ def _(controversial5_card, lowest5_card, mo, summary_card):
 
 @app.cell
 def _(df, mo, plot_ratings):
-    plot_ratings_card = mo.vstack([mo.md("## Plot Ratings"), mo.ui.plotly(plot_ratings(df))])
+    plot_ratings_card = mo.vstack(
+        [mo.md("## Plot Ratings"), mo.ui.plotly(plot_ratings(df))]
+    )
     return (plot_ratings_card,)
 
 
 @app.cell
 def _(CATEGORY_TITLES, SECTION_TITLES, df, get_text_feedback, mo):
-    feedback_df = get_text_feedback(df)[["respondent", "sec_name", "category", "why", "feedback"]].copy()
+    feedback_df = get_text_feedback(df)[
+        ["respondent", "sec_name", "category", "why", "feedback"]
+    ].copy()
     feedback_df["category"] = feedback_df["category"].map(CATEGORY_TITLES)
     feedback_df["sec_name"] = feedback_df["sec_name"].map(SECTION_TITLES)
     feedback_df = feedback_df.rename(

@@ -295,27 +295,31 @@ def get_text_feedback(df):
             feedback_blank = _is_blank(feedback)
             if why_blank and feedback_blank:
                 continue
-            records.append({
-                "sec_name": sec_name,
-                "category": category,
-                "respondent": respondent,
-                "rating": rating,
-                "why": None if why_blank else why,
-                "feedback": None if feedback_blank else feedback,
-            })
+            records.append(
+                {
+                    "sec_name": sec_name,
+                    "category": category,
+                    "respondent": respondent,
+                    "rating": rating,
+                    "why": None if why_blank else why,
+                    "feedback": None if feedback_blank else feedback,
+                }
+            )
 
     for suffix_name in SUFFIX_NAMES:
         for respondent, text in zip(respondent_ids, df[suffix_name]):
             if _is_blank(text):
                 continue
-            records.append({
-                "sec_name": suffix_name,
-                "category": None,
-                "respondent": respondent,
-                "rating": None,
-                "why": None,
-                "feedback": text,
-            })
+            records.append(
+                {
+                    "sec_name": suffix_name,
+                    "category": None,
+                    "respondent": respondent,
+                    "rating": None,
+                    "why": None,
+                    "feedback": text,
+                }
+            )
 
     return pd.DataFrame(records)
 
@@ -386,7 +390,9 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
 
             block = [f"### {section_title(i, slug)}", ""]
             if not section_ratings.empty:
-                block.append(f"**Average rating:** {section_ratings['rating'].mean():.1f}")
+                block.append(
+                    f"**Average rating:** {section_ratings['rating'].mean():.1f}"
+                )
                 block.append("")
                 block.extend(
                     f"- {row.respondent}: {row.rating:g}"
@@ -396,12 +402,20 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
             if why_rows:
                 block.append("#### Why")
                 block.append("")
-                block.extend(_format_rated_comments(why_rows, low_rating_threshold=low_rating_threshold))
+                block.extend(
+                    _format_rated_comments(
+                        why_rows, low_rating_threshold=low_rating_threshold
+                    )
+                )
                 block.append("")
             if feedback_rows:
                 block.append("#### What would increase support")
                 block.append("")
-                block.extend(_format_rated_comments(feedback_rows, low_rating_threshold=low_rating_threshold))
+                block.extend(
+                    _format_rated_comments(
+                        feedback_rows, low_rating_threshold=low_rating_threshold
+                    )
+                )
                 block.append("")
             section_blocks.append(block)
 
@@ -504,8 +518,12 @@ def _shorten_column_names(df):
             used[feedback_idx] = True
         matched_sections.setdefault(idx, []).append((i, why_idx, feedback_idx))
 
-    missing_fixed = [name for name in FIXED_COLUMNS.values() if name not in matched_fixed]
-    missing_sections = [i for i in range(len(SECTION_SLUGS)) if i not in matched_sections]
+    missing_fixed = [
+        name for name in FIXED_COLUMNS.values() if name not in matched_fixed
+    ]
+    missing_sections = [
+        i for i in range(len(SECTION_SLUGS)) if i not in matched_sections
+    ]
     if missing_fixed or missing_sections:
         raise ValueError(
             f"Missing expected columns: fixed={missing_fixed}, "
@@ -516,7 +534,9 @@ def _shorten_column_names(df):
     if dropped:
         print(f"_shorten_column_names: dropping unrecognized columns: {dropped}")
 
-    out = {name: df.iloc[:, matched_fixed[name]] for name in ("timestamp", "group", "name")}
+    out = {
+        name: df.iloc[:, matched_fixed[name]] for name in ("timestamp", "group", "name")
+    }
 
     for i, slug in enumerate(SECTION_SLUGS):
         matches = matched_sections[i]
@@ -605,7 +625,9 @@ def _respondent_ids(df):
         If two rows produce the same identifier.
     """
     ids = [
-        str(group).strip() if _is_blank(name) else f"{str(group).strip()} - {str(name).strip()}"
+        str(group).strip()
+        if _is_blank(name)
+        else f"{str(group).strip()} - {str(name).strip()}"
         for group, name in zip(df["group"], df["name"])
     ]
     if len(ids) != len(set(ids)):
@@ -633,7 +655,8 @@ def _melt_by_category(numbers_df):
         data.
     """
     respondent_cols = [
-        c for c in numbers_df.columns
+        c
+        for c in numbers_df.columns
         if c not in ("sec_name", "category", "average", "median")
     ]
 

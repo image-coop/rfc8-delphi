@@ -19,7 +19,10 @@ SECTION_TITLES = {
 }
 
 CATEGORY_COLORS = dict(
-    zip(CATEGORY_ORDER, sns.color_palette("colorblind", n_colors=len(CATEGORY_ORDER)).as_hex())
+    zip(
+        CATEGORY_ORDER,
+        sns.color_palette("colorblind", n_colors=len(CATEGORY_ORDER)).as_hex(),
+    )
 )
 
 BOX_FILL_OPACITY = 0.12
@@ -121,8 +124,12 @@ def build_ratings_figure(plot_data):
         .index.map(SECTION_TITLES)
         .tolist()
     )
-    rating_range = plot_data.groupby("sec_name")["rating"].agg(lambda s: s.max() - s.min())
-    rating_order_range = rating_range.sort_values(ascending=False).index.map(SECTION_TITLES).tolist()
+    rating_range = plot_data.groupby("sec_name")["rating"].agg(
+        lambda s: s.max() - s.min()
+    )
+    rating_order_range = (
+        rating_range.sort_values(ascending=False).index.map(SECTION_TITLES).tolist()
+    )
     category_order = [
         SECTION_TITLES[f"p{i}_{slug}"]
         for category in CATEGORY_ORDER
@@ -277,5 +284,7 @@ def _hover_text(label, rating, why, feedback):
     if pd.notna(why):
         lines.extend(["", "<b>Why</b>", _wrap_for_hover(why)])
     if pd.notna(feedback):
-        lines.extend(["", "<b>What would increase support</b>", _wrap_for_hover(feedback)])
+        lines.extend(
+            ["", "<b>What would increase support</b>", _wrap_for_hover(feedback)]
+        )
     return "<br>".join(lines)
