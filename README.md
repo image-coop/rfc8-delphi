@@ -7,12 +7,14 @@ RFC-8 is an essential piece of the roadmap to [OME-Zarr v1.0](https://forum.imag
 and discovering collections of related objects (images, labels, tables, etc.) in OME-Zarr, and a mechanism that would allow the community to define and discover
 extensions to the core schema.
 
-We (Image Coop, RFC-8 authors, other interested parties) are using a Delphi-style* consultation process on RFC-8 to help us understand where participating groups currently agree, where there are differences, and which parts of the proposal may need further work.
+We (Image Coop, RFC-8 authors, other interested parties) are using a Delphi-style consultation process on RFC-8 to help us understand where participating groups currently agree, where there are differences, and which parts of the proposal may need further work.
 
 A Delphi process is a structured way of building consensus through several rounds of anonymous or group-based assessment, with each round informed by the results of the previous one. See https://en.wikipedia.org/wiki/Delphi_method for a short overview.
 
 If you'd like to learn more about how we're using this process for RFC-8, reach out
 to omezarr@image.coop
+
+**Note:** The response CSVs are currently private for data privacy reasons. We hope to make them public at a future date. We cannot guarantee access, but if you would like to contribute to this process, contact omezarr@image.coop to discuss access.
 
 ## Usage
 
