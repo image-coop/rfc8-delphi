@@ -264,6 +264,35 @@ def section_stats(df, respondents=None):
     return stats
 
 
+def get_top_level_feedback(df):
+    """
+    Build a table of respondent, top changes and discussion needed.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        A shortened, categorized df.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per respondent, with columns ``respondent``,
+        ``top_changes``, ``discussion_needed``. Rows where both text
+        columns are blank are dropped.
+    """
+    out = pd.DataFrame(
+        {
+            "respondent": _respondent_ids(df),
+            "top_changes": df["top_changes"],
+            "discussion_needed": df["discussion_needed"],
+        }
+    )
+    both_blank = out["top_changes"].apply(_is_blank) & out["discussion_needed"].apply(
+        _is_blank
+    )
+    return out[~both_blank].reset_index(drop=True)
+
+
 def get_text_feedback(df):
     """
     Build a long-format spreadsheet of free-text feedback.

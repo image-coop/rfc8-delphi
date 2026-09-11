@@ -26,6 +26,7 @@ def _():
         LOW_RATING_THRESHOLD,
         get_numbers_only,
         get_text_feedback,
+        get_top_level_feedback,
         prepare_df,
         section_stats,
     )
@@ -39,6 +40,7 @@ def _():
         SECTION_TITLES,
         get_numbers_only,
         get_text_feedback,
+        get_top_level_feedback,
         go,
         mo,
         pd,
@@ -239,8 +241,43 @@ def _(CATEGORY_TITLES, SECTION_TITLES, df, get_text_feedback, mo):
 
 
 @app.cell
-def _(feedback_card, mo, plot_ratings_card, respondents_line, top_row):
-    mo.vstack([respondents_line, top_row, plot_ratings_card, feedback_card], gap=2)
+def _(df, get_top_level_feedback, mo):
+    top_level_df = (
+        get_top_level_feedback(df)
+        .rename(
+            columns={
+                "respondent": "Respondent",
+                "top_changes": "Top Changes",
+                "discussion_needed": "Discussion Needed",
+            }
+        )
+        .fillna("")
+    )
+
+    top_level_table = mo.ui.table(
+        top_level_df.to_dict("records"),
+        selection=None,
+        wrapped_columns=["Top Changes", "Discussion Needed"],
+    )
+    top_level_card = mo.vstack(
+        [mo.md("## Top Changes / Discussion Needed"), top_level_table]
+    )
+    return (top_level_card,)
+
+
+@app.cell
+def _(
+    feedback_card,
+    mo,
+    plot_ratings_card,
+    respondents_line,
+    top_level_card,
+    top_row,
+):
+    mo.vstack(
+        [respondents_line, top_row, plot_ratings_card, feedback_card, top_level_card],
+        gap=2,
+    )
     return
 
 
