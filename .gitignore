@@ -179,3 +179,9 @@ agent-logs/
 
 # marimo
 __marimo__/
+
+# ruff
+.ruff_cache/
+
+# we tell people to put their data here
+resources/
