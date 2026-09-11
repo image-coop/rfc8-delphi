@@ -399,12 +399,12 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
                 continue
 
             why_rows = [
-                (row.rating, row.why)
+                (row.rating, row.respondent, row.why)
                 for row in section_rows.itertuples()
                 if pd.notna(row.why)
             ]
             feedback_rows = [
-                (row.rating, row.feedback)
+                (row.rating, row.respondent, row.feedback)
                 for row in section_rows.itertuples()
                 if pd.notna(row.feedback)
             ]
@@ -414,7 +414,7 @@ def render_feedback_markdown(df, low_rating_threshold=LOW_RATING_THRESHOLD):
             section_ratings = (
                 ratings_df[ratings_df["sec_name"] == sec_name]
                 .dropna(subset=["rating"])
-                .sort_values("respondent")
+                .sort_values("rating")
             )
 
             block = [f"### {section_title(i, slug)}", ""]
@@ -709,8 +709,8 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
 
     Parameters
     ----------
-    rows : list of tuple of (float, str)
-        ``(rating, text)`` pairs for one section.
+    rows : list of tuple of (float, str, str)
+        ``(rating, respondent, text)`` triples for one section.
     low_rating_threshold : float, optional
         Ratings below this value are grouped before a ``---`` separator
         from ratings at or above it.
@@ -718,19 +718,19 @@ def _format_rated_comments(rows, low_rating_threshold=LOW_RATING_THRESHOLD):
     Returns
     -------
     list of str
-        Markdown lines: each comment as a blockquote with its rating
-        bolded on its own line, sorted by rating ascending.
+        Markdown lines: each comment as a blockquote with its rating and
+        respondent bolded on its own line, sorted by rating ascending.
     """
     sorted_rows = sorted(rows, key=lambda r: r[0])
     lines = []
     separator_done = False
-    for rating, text in sorted_rows:
+    for rating, respondent, text in sorted_rows:
         if not separator_done and rating >= low_rating_threshold:
             if lines:
                 lines.append("---")
                 lines.append("")
             separator_done = True
-        lines.append(f"> **{rating:g}**")
+        lines.append(f"> **{rating:g} — {respondent}**")
         lines.append(">")
         for paragraph in str(text).splitlines():
             lines.append(f"> {paragraph}" if paragraph.strip() else ">")
