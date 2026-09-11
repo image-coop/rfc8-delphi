@@ -12,17 +12,19 @@ We (Image Coop, RFC-8 authors, other interested parties) are using a Delphi-styl
 A Delphi process is a structured way of building consensus through several rounds of anonymous or group-based assessment, with each round informed by the results of the previous one. See https://en.wikipedia.org/wiki/Delphi_method for a short overview.
 
 If you'd like to learn more about how we're using this process for RFC-8, reach out
-to ome-zarr@image.coop
+to omezarr@image.coop
 
 ## Usage
 
-1. Place response CSVs in a resources/ folder in your cloned RFC8-Delphi repo.
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and clone this repo.
 
-2. Use `uvx marimo run --sandbox dashboard.py -- -csv-path path/to/csv` to load the summary dashboard.
+2. Place response CSVs in a resources/ folder in your cloned RFC8-Delphi repo.
 
-3. Use `uv run render_markdown.py path/to/csv path/to/markdown` to render summary markdown of a single csv.
+3. Use `uvx marimo run --sandbox dashboard.py -- -csv-path path/to/csv` to load the summary dashboard.
 
-4. If you wish to explore the spreadsheet on your own, you may want to use the `prepare_df` utility function. From the repo root:
+4. Use `uv run render_markdown.py path/to/csv path/to/markdown` to render summary markdown of a single csv.
+
+5. If you wish to explore the spreadsheet on your own, you may want to use the `prepare_df` utility function. From the repo root:
 
 ```python
 import pandas as pd
