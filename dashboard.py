@@ -175,6 +175,9 @@ def _(SECTION_TITLES, lowest5_metric, mo, stats):
 
 @app.cell
 def _(SECTION_TITLES, mo, stats):
+    controversial5_description = mo.md(
+        "Most controversial sections. Ranked by range of ratings across all groups."
+    )
     controversial5_df = stats.sort_values("range", ascending=False).head(5)[
         ["sec_name", "mean", "range"]
     ]
@@ -189,7 +192,7 @@ def _(SECTION_TITLES, mo, stats):
         format_mapping={"Avg. Rating": lambda v: f"{v:.1f}"},
     )
     controversial5_card = mo.vstack(
-        [mo.md("### Controversial 5"), controversial5_table]
+        [mo.md("### Controversial 5"), controversial5_description, controversial5_table]
     )
     return (controversial5_card,)
 
