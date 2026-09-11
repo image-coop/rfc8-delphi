@@ -10,3 +10,14 @@ to RFC-8.
 2. Use `uvx marimo run --sandbox dashboard.py -- -csv-path path/to/csv` to load the summary dashboard.
 
 3. Use `uv run render_markdown.py path/to/csv path/to/markdown` to render summary markdown of a single csv.
+
+4. If you wish to explore the spreadsheet on your own, you may want to use the `prepare_df` utility function. From the repo root:
+
+```python
+import pandas as pd
+# other useful utilities live in this file. Check docstrings.
+from utils.combine import prepare_df
+
+df = pd.read_csv('path/to/csv')
+df = prepare_df(df)
+```
